@@ -3,7 +3,6 @@ from macro_actions import ENCODER1, ENCODER2, ENCODER3, ENCODER4, ENCODER5, ENCO
 from macro_actions import LOOP_BUTTON, LEFT_BUTTON, REC_BUTTON, RIGHT_BUTTON, PLAY_BUTTON, SAVE_BUTTON, STOP_BUTTON
 from macro_actions import NAV_WHEEL
 
-import _thread
 import config_macros
 import ui
 
@@ -142,7 +141,6 @@ class ArturiaMacroBank:
 
         self._display_fn = display_fn
         self._macro_map = dict(DEFAULT_MACRO_MAP)
-        self._lock = _thread.allocate_lock()
         for k, v in config_macros.OVERRIDE_MACROS.items():
             self._macro_map[k] = v
 
@@ -166,18 +164,15 @@ class ArturiaMacroBank:
             param_value: integer providing any additional information to the function (e.g. can be value of the
               channel the button corresponds to, or a delta value corresponding to the amount the knob turned)
         """
-        self._lock.acquire()
-        try:
-            help_request = self._is_help_request(modifier_mask)
-            modifier_mask &= ~SAVE_BUTTON
-            key = (modifier_mask, macro_id)
-            action = 'Help' if help_request else 'Macro'
-            if key in self._macro_map:
-                doc_str = self._macro_map[key].__doc__
-                if doc_str:
-                    self._display_fn(action, doc_str)
-                    ui.setHintMsg('[%s] %s' % (action, doc_str))
-                if not help_request:
-                    self._macro_map[key](param_value)
-        finally:
-            self._lock.release()
+        # MIDI scripts run on FL's main callback thread; no lock needed (and _thread can be restricted).
+        help_request = self._is_help_request(modifier_mask)
+        modifier_mask &= ~SAVE_BUTTON
+        key = (modifier_mask, macro_id)
+        action = 'Help' if help_request else 'Macro'
+        if key in self._macro_map:
+            doc_str = self._macro_map[key].__doc__
+            if doc_str:
+                self._display_fn(action, doc_str)
+                ui.setHintMsg('[%s] %s' % (action, doc_str))
+            if not help_request:
+                self._macro_map[key](param_value)

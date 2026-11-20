@@ -1,5 +1,5 @@
-import _heapq
-import _random
+import heapq
+import random
 import time
 
 
@@ -13,26 +13,24 @@ class Scheduler:
     """
     def __init__(self):
         self._tasks_pq = []
-        self._random = _random.Random()
+        self._random = random.Random()
+        self._seq = 0
 
     def ScheduleTask(self, task, delay=0):
         time_ms = time.monotonic() * 1000
-        # Assumption is that there are no ties. Otherwise, comparing last element of the tuple will lead to crashes.
+        # Sequence + random break ties so heap never compares the callable.
+        self._seq += 1
         entry = (time_ms + delay,
-                 len(self._tasks_pq),
-                 # Add some random numbers so that one of these will break the tie
-                 int(self._random.random() * 16777215),
-                 int(self._random.random() * 16777215),
-                 int(self._random.random() * 16777215),
-                 int(self._random.random() * 16777215),
+                 self._seq,
                  int(self._random.random() * 16777215),
                  task)
-        _heapq.heappush(self._tasks_pq, entry)
+        heapq.heappush(self._tasks_pq, entry)
         return entry
 
     def CancelTask(self, entry):
         try:
             self._tasks_pq.remove(entry)
+            heapq.heapify(self._tasks_pq)
             return True
         except ValueError:
             # Entry was already removed and executed.
@@ -41,10 +39,10 @@ class Scheduler:
     def Idle(self):
         time_ms = time.monotonic() * 1000
         while self._tasks_pq:
-            entry = _heapq.heappop(self._tasks_pq)
+            entry = heapq.heappop(self._tasks_pq)
             if entry[0] > time_ms:
                 # Entry delay condition not met. Put back on queue and wait until next refresh cycle.
-                _heapq.heappush(self._tasks_pq, entry)
+                heapq.heappush(self._tasks_pq, entry)
                 return
             task = entry[-1]
             task()

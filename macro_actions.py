@@ -1,5 +1,5 @@
 """ Defines all constants and available actions that can be linked to a macro button. """
-import _random
+import random
 
 import arrangement
 import channels
@@ -23,11 +23,12 @@ if SCRIPT_VERSION >= 8:
 PYKEYS_ENABLED = False
 try:
     import pykeys
-    PYKEYS_ENABLED = True
-    print('pykeys library enabled')
-except Exception as e:
+    PYKEYS_ENABLED = bool(getattr(pykeys, '_ENABLED', False)) and callable(getattr(pykeys, 'send', None))
+    if not PYKEYS_ENABLED:
+        # Expected on FL 2025/2026 — ctypes DLLs cannot load in the script subinterpreter.
+        pass
+except Exception:
     PYKEYS_ENABLED = False
-    print('pykeys unavailable: %s' % e)
 
 # These represent the bit in which the button must be held.
 # For a macro that requires two modifiers to be held, simply add the constants.
@@ -90,7 +91,7 @@ class Actions:
     NOTE: Doc-strings are used to document the macro. This allows for a two-button press plus bank button to display
     the doc-string to the user. As such, try to limit doc strings to 16-chars for the help-system implementation.
     """
-    RANDOM_GENERATOR = _random.Random()
+    RANDOM_GENERATOR = random.Random()
 
     # ---------------------- AVAILABLE ACTIONS --------------------------
     @staticmethod
@@ -849,12 +850,8 @@ class Actions:
         transport.globalTransport(midi.FPT_Menu, 1)
         if not channel_rack_visible:
             ui.hideWindow(midi.widChannelRack)
-        # Give some time for popup to appear
-        time.sleep(0.2)
-        timeout_time = time.monotonic() + 1
-        # Avoid exceed waiting more than 1 second
-        while not ui.isInPopupMenu() and time.monotonic() < timeout_time:
-            time.sleep(0.05)
+        # Do not busy-wait / sleep on FL's MIDI callback (can freeze or crash).
+        # Menu may already be open; callers that need it check ui.isInPopupMenu().
 
     @staticmethod
     def _navigate_to_menu(menu):

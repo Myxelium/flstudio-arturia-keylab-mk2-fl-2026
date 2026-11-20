@@ -74,6 +74,11 @@ class MidiEventDispatcher:
                 processed = True
         else:
             debug.log("DISPATCHER", "No handler found.", event=event)
+            # Surface unknown button/CC IDs while probing so mapping gaps are obvious.
+            try:
+                debug.probe(event, prefix='UNHANDLED')
+            except Exception:
+                pass
 
         return processed
 

@@ -16,6 +16,17 @@ There is a discussion thread you can provide feedback or ask questions at [here]
 I can also be reached via [Discord](https://discord.gg/aqA8rnnTFp)
 
 
+## FL Studio 2025 / 2026 (Python 3.12) notes
+
+This local copy was updated for FL Studio 2025/2026:
+
+- Replaced the old `pykeys.cp39-*.pyd` (Python 3.9) with a pure-Python `pykeys.py` using Win32 `SendInput`
+- Switched `_heapq` / `_random` / `_thread` usage to the normal stdlib (`heapq`, `random`)
+- Softened import-time `device.getName()` failures and removed blocking sleeps that could freeze FL
+
+Folder path on this machine:
+`Documents\Image-Line\FL Studio\Settings\Hardware\Arturia Keylab mkII DAW Script`
+
 ## Setting Up
 Video link describing setup below:
 
@@ -34,6 +45,18 @@ Then in FL Studio, goto `Options->Midi Settings` and select your Arturia device 
 
 IMPORTANT: Make sure the scripts are in a subfolder within the Hardware folder. Otherwise, FL Studio will ignore the
 files.
+
+### Quick Windows MIDI assignment (FL Studio 2025/2026)
+
+1. MIDI Control Center → Device settings → **DAW map = Default MCU**, then quit MCC.
+2. On the KeyLab, press **DAW** (not User / Analog Lab).
+3. FL Studio → Options → MIDI settings:
+
+| Input / Output | Controller type | Port |
+|---|---|---|
+| `KeyLab mkII …` (MIDI) | `Arturia Keylab mkII (MIDI)` *(optional)* or Generic controller | e.g. 0 |
+| `MIDIIN2 (KeyLab mkII …)` (DAW) | **`Arturia Keylab mkII DAW (MIDIIN2/MIDIOUT2)`** | e.g. 1 |
+| `MIDIOUT2 (KeyLab mkII …)` | same as DAW input | **same as DAW (1)** |
 
 ### For Macs ###
 

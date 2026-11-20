@@ -1,12 +1,15 @@
 # name=Arturia Keylab mkII DAW (MIDIIN2/MIDIOUT2)
 # url=https://github.com/rjuang/flstudio-arturia-keylab-mk2
 # receiveFrom=Arturia Keylab mkII (MIDI)
+# supportedHardwareIds=00 20 6B
+# Updated for FL Studio 2025/2026 (Python 3.12) — local pykeys.py shim
 import version
 from arturia import ArturiaController
 from arturia_processor import ArturiaMidiProcessor
 
 import arturia_midi
 import config
+import debug
 import ui
 
 
@@ -61,6 +64,9 @@ def OnMidiMsg(event):
         _payload_buffer.append(event.data2)
         event.handled = True
     else:
+        # Log first events so we can see real KeyLab → FL mappings in Script output.
+        if event.status not in (arturia_midi.INTER_SCRIPT_STATUS_BYTE, arturia_midi.PAYLOAD_STATUS_BYTE):
+            debug.probe(event, prefix='DAW')
         _processor.ProcessEvent(event)
         _controller.RefreshDisplay()
 

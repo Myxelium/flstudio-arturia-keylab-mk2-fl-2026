@@ -1,7 +1,16 @@
 # User-settable settings to alter behavior of keyboard
 import device
 
-TRUE_IF_ESSENTIAL_KEYBOARD = 'mkII' not in device.getName()
+
+def _device_name():
+    try:
+        return device.getName() or ''
+    except Exception:
+        # Default to mkII naming so Essential overrides are not applied by accident.
+        return 'KeyLab mkII'
+
+
+TRUE_IF_ESSENTIAL_KEYBOARD = 'mkII' not in _device_name()
 
 # Set to True to allow drum pads to light up as a metronome indicator.
 ENABLE_PAD_METRONOME_LIGHTS = True

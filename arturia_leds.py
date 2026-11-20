@@ -5,9 +5,18 @@ import device
 import time
 import utils
 
-ESSENTIAL_KEYBOARD = 'mkII' not in device.getName()
-MKII_88_KEYBOARD = 'mkII 88' in device.getName()
-MKII_49_KEYBOARD = 'mkII 49' in device.getName()
+
+def _device_name():
+    try:
+        return device.getName() or ''
+    except Exception:
+        return 'KeyLab mkII'
+
+
+_DEVICE_NAME = _device_name()
+ESSENTIAL_KEYBOARD = 'mkII' not in _DEVICE_NAME
+MKII_88_KEYBOARD = 'mkII 88' in _DEVICE_NAME
+MKII_49_KEYBOARD = 'mkII 49' in _DEVICE_NAME
 
 
 class ArturiaLights:
@@ -255,5 +264,3 @@ class ArturiaLights:
                 self._send_fn(ArturiaLights.SET_RGB_LIGHT_COMMAND + bytes([led_id, r, g, b]))
             else:
                 self._send_fn(ArturiaLights.SET_MONOCHROME_LIGHT_COMMAND + bytes([led_id, led_value]))
-            # Need to intentionally sleep to allow time for keyboard to process command sent.
-            time.sleep(0.0001)

@@ -1,4 +1,4 @@
-import _random
+import random
 
 import arrangement
 import channels
@@ -38,7 +38,16 @@ SS_START = 2
 class ArturiaMidiProcessor:
     @staticmethod
     def _is_pressed(event):
-        return event.controlVal != 0
+        status = int(getattr(event, 'status', 0) or 0)
+        msg_type = status & 0xF0
+        # Note Off is always a release.
+        if msg_type == 0x80:
+            return False
+        value = int(getattr(event, 'data2', None) or getattr(event, 'controlVal', 0) or 0)
+        # Note On with velocity 0 is MIDI release.
+        if msg_type == 0x90:
+            return value != 0
+        return value != 0
 
     def __init__(self, controller):
         def by_midi_id(event): return event.midiId
@@ -49,15 +58,33 @@ class ArturiaMidiProcessor:
         self._button_hold_action_committed = False
         self._button_mode = 0
         self._locked_mode = 0
-        self._random = _random.Random()
+        self._random = random.Random()
         self._mixer_plugins_visible = False
         self._mixer_plugins_last_track = 0
 
+        # Route by MIDI message type (status high nibble). Newer FL builds may set
+        # midiId == full status (incl. channel), so matching only 144/176/224 breaks
+        # pitch-bend faders on channels 1-8 and channeled note/CC messages.
+        def by_msg_type(event):
+            status = int(getattr(event, 'status', 0) or 0)
+            midi_id = int(getattr(event, 'midiId', 0) or 0)
+            msg_type = status & 0xF0
+            if msg_type in (0x80, 0x90, 0xB0, 0xE0):
+                return msg_type
+            # Fall back to classic midiId values (144/176/224)
+            if midi_id in (144, 176, 224):
+                return midi_id & 0xF0 if midi_id >= 128 else midi_id
+            return midi_id
+
         self._midi_id_dispatcher = (
-            MidiEventDispatcher(by_midi_id)
+            MidiEventDispatcher(by_msg_type)
+            .SetHandler(0x90, self.OnCommandEvent)   # Note on (transport/buttons)
+            .SetHandler(0x80, self.OnCommandEvent)   # Note off
             .SetHandler(144, self.OnCommandEvent)
+            .SetHandler(0xB0, self.OnKnobEvent)      # CC (encoders / nav wheel)
             .SetHandler(176, self.OnKnobEvent)
-            .SetHandler(224, self.OnSliderEvent))   # Sliders 1-9
+            .SetHandler(0xE0, self.OnSliderEvent)    # Pitch bend faders (all channels)
+            .SetHandler(224, self.OnSliderEvent))
 
         self._midi_command_dispatcher = (
             MidiEventDispatcher(by_control_num)
@@ -372,19 +399,58 @@ class ArturiaMidiProcessor:
         return self._midi_id_dispatcher.Dispatch(event)
 
     def OnCommandEvent(self, event):
+        # Prefer data1 for note number; controlNum is a CC shadow and can be wrong
+        # on some FL versions for note events.
+        if hasattr(event, 'data1') and event.data1 is not None:
+            try:
+                event.controlNum = event.data1
+            except Exception:
+                pass
+        if hasattr(event, 'data2') and event.data2 is not None:
+            try:
+                event.controlVal = event.data2
+            except Exception:
+                pass
         self._midi_command_dispatcher.Dispatch(event)
 
     def OnKnobEvent(self, event):
+        if hasattr(event, 'data1') and event.data1 is not None:
+            try:
+                event.controlNum = event.data1
+            except Exception:
+                pass
+        if hasattr(event, 'data2') and event.data2 is not None:
+            try:
+                event.controlVal = event.data2
+            except Exception:
+                pass
         self._knob_dispatcher.Dispatch(event)
 
     def OnSliderEvent(self, event):
-        slider_index = event.status - event.midiId
-        slider_value = event.controlVal
+        # MCU faders are pitch-bend on channels 0-8. Prefer channel nibble.
+        status = int(event.status)
+        midi_id = int(getattr(event, 'midiId', 0xE0) or 0xE0)
+        if (status & 0xF0) == 0xE0:
+            slider_index = status & 0x0F
+        else:
+            slider_index = status - midi_id
+
+        # Pitch bend is 14-bit: data1 + (data2 << 7). MCU scripts usually use MSB.
+        data2 = int(getattr(event, 'data2', 0) or 0)
+        data1 = int(getattr(event, 'data1', 0) or 0)
+        slider_value = int(getattr(event, 'controlVal', 0) or 0)
+        if (status & 0xF0) == 0xE0:
+            # Prefer 7-bit MSB (Mackie-style); fall back to controlVal.
+            slider_value = data2 if data2 or data1 else slider_value
 
         if SCRIPT_VERSION < 8:
             # Arturia keyboards on 20.7.2 seem to experience issues with sliders bouncing values between 126 and 127.
             if slider_value >= 126:
                 slider_value = 127
+
+        if slider_index < 0 or slider_index > 8:
+            debug.log('OnSliderEvent', 'Ignoring out-of-range slider %d' % slider_index, event=event)
+            return
 
         debug.log('OnSliderEvent', 'Slider %d = %d' % (slider_index, slider_value), event=event)
         self._controller.encoders().ProcessSliderInput(event, slider_index, slider_value)
